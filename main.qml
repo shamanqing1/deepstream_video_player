@@ -24,26 +24,15 @@ ApplicationWindow {
         }
     }
 
-    header: ToolBar {
-        Flow {
-            anchors.fill: parent
-            ToolButton {
-                text: qsTr("Open")
-                icon.name: "document-open"
-                onClicked: fileOpenDialog.open()
-            }
-        }
-    }
-
     FileDialog {
         id: fileOpenDialog
-        title: qsTr("Select an video file")
+        title: qsTr("Select a video file")
         folder: shortcuts.movies
         nameFilters: {
             "Video files (*.mp4 *.avi *.wmv)"
         }
 
-        onAccepted: player.uri = fileUrl;
+        onAccepted: player.addVideo(fileUrl);
     }
 
     Action {
@@ -59,6 +48,14 @@ ApplicationWindow {
         Player {
             id: player
             output: videoOuput
+            onPlaylistChanged: {
+                console.log(playlist)
+                let model = playlistView.model
+                model.clear()
+                for(var i = 0; i < playlist.length; i++) {
+                    model.append({"name": playlist[i]})
+                }
+            }
         }
 
         GstGLVideoItem {
@@ -69,4 +66,53 @@ ApplicationWindow {
             height: parent.height
         }
     }
+
+
+   Item {
+       id: playlistItem
+       anchors.right: parent.right
+       anchors.top: parent.top
+       width: 400
+       height: parent.height
+
+       ListView {
+           id: playlistView
+           anchors.fill: parent
+           anchors.margins: 10
+           spacing: 4
+           clip: true
+           orientation: ListView.Vertical
+           model: ListModel{}
+           delegate: listItem
+       }
+
+       Component {
+           id: listItem
+           Rectangle {
+               width: playlistView.width
+               height: 32
+               color: Qt.rgba(0, 0, 0, 0.2)
+               Text {
+                   anchors.left: parent.left
+                   width: parent.width - 32
+                   text: index + ": " + name
+                   font.pixelSize: 20
+                   color: Qt.rgba(1, 1, 1, 1.0)
+                   wrapMode: Text.NoWrap
+                   elide: Text.ElideLeft
+               }
+
+               Button {
+                   anchors.right: parent.right
+                   width: 32
+                   height: 32
+                   icon.source: "images/close.png"
+                   opacity: 0.5
+                   onClicked: {
+                       player.removeVideo(index);
+                   }
+               }
+           }
+       }
+   }
 }

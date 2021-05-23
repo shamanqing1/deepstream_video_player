@@ -2,6 +2,7 @@
 
 Player::Player(QObject *parent) : QObject(parent)
 {
+    memset(&ctx_, 0, sizeof(ctx_));
     createPipeline();
 }
 
@@ -10,18 +11,37 @@ Player::~Player()
     destroyPipeline();
 }
 
-const QString &Player::uri() const
+void Player::addVideo(const QString &uri)
 {
-    return uri_;
+    playlist_.append(uri);
+    ctx_.num_source = playlist_.size();
+    emit playlistChanged();
+
+    int id = getUnusedSourceId();
+    gchar *name = g_strdup_printf("videosrc_%u", id);
+    qDebug() << "adding source: " << name;
+    ctx_.source[id] = gst_element_factory_make("uridecodebin", name);
+    g_object_set(G_OBJECT(ctx_.source[id]), "uri", uri.toStdString().c_str(), NULL);
+    g_signal_connect(G_OBJECT(ctx_.source[id]), "pad-added", G_CALLBACK(cb_newpad), &ctx_);
+
+    gst_bin_add(GST_BIN(ctx_.pipeline), ctx_.source[id]);
+    ctx_.source_enable[id] = true;
+    gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
 }
 
-void Player::setUri(const QString &uri)
+void Player::removeVideo(int index)
 {
-    uri_ = uri;
-    qDebug() << "open uri: " << uri;
-    gst_element_set_state(ctx_.pipeline, GST_STATE_READY);
-    g_object_set(G_OBJECT(ctx_.source), "uri", uri.toStdString().c_str(), NULL);
+    playlist_.removeAt(index);
+    emit playlistChanged();
+    int id = getSourceId(index);
+    ctx_.source_enable[id] = false;
+    qDebug() << "remove source: " << gst_element_get_name(ctx_.source[id]);
+    gst_element_set_state(ctx_.source[id], GST_STATE_NULL);
+    gst_bin_remove(GST_BIN(ctx_.pipeline), ctx_.source[id]);
+    ctx_.source[id] = nullptr;
+    --ctx_.num_source;
     gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
+
 }
 
 void Player::setOutput(QVariant output)
@@ -31,7 +51,7 @@ void Player::setOutput(QVariant output)
 
 }
 
-static void cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
+void Player::cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
 {
     GstCaps *caps = gst_pad_query_caps(pad, NULL);
     const GstStructure *str = gst_caps_get_structure(caps, 0);
@@ -40,7 +60,12 @@ static void cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
     AppCtx *ctx = (AppCtx *)data;
 
     if(!strncmp(name, "video", 5)) {
-        GstPad *sinkpad = gst_element_get_static_pad(ctx->nvvidconv, "sink");
+        gchar *elem_name = gst_element_get_name(decodebin);
+        gchar *padname = g_strconcat("sink_", g_strsplit(elem_name, "_", 0)[1], NULL);
+        qDebug() << "adding pad name: " << padname;
+        GstPad *sinkpad = gst_element_get_static_pad(ctx->streammux, padname);
+        if(!sinkpad)
+            sinkpad = gst_element_get_request_pad(ctx->streammux, padname);
 
         if(gst_pad_is_linked(pad)) {
             qDebug() << "Already linked decodebin to pipeline, skip";
@@ -49,25 +74,35 @@ static void cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
                 qDebug() << "Failed to link decodebin to pipeline";
             }
         }
+        gst_object_unref(sinkpad);
     }
 }
 
 void Player::createPipeline()
 {
     ctx_.pipeline = gst_pipeline_new("pipeline");
-    ctx_.source = gst_element_factory_make("uridecodebin", "videosrc");
+    // ctx_.source = gst_element_factory_make("uridecodebin", "videosrc");
+    ctx_.streammux = gst_element_factory_make("nvstreammux", "streammux");
     ctx_.nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvidconv");
+    ctx_.osd = gst_element_factory_make("nvdsosd", "osd");
+    ctx_.nvtiler = gst_element_factory_make("nvmultistreamtiler", "nvtiler");
+    ctx_.nvglconv = gst_element_factory_make("nvvideoconvert", "nvglconv");
     ctx_.glupload = gst_element_factory_make("glupload", "glupload");
     ctx_.glcolorconv = gst_element_factory_make("glcolorconvert", "glcolorconv");
     ctx_.sink = gst_element_factory_make("qmlglsink", "sink");
 
+    g_object_set(ctx_.streammux, "batch-size", 1, NULL);
+    g_object_set(ctx_.streammux, "width", 1280, NULL);
+    g_object_set(ctx_.streammux, "height", 720, NULL);
 
-    g_signal_connect(G_OBJECT(ctx_.source), "pad-added", G_CALLBACK(cb_newpad), &ctx_);
+    g_object_set(ctx_.osd, "process-mode", 1, NULL);
 
-    gst_bin_add_many(GST_BIN(ctx_.pipeline), ctx_.source, ctx_.nvvidconv,
-                     ctx_.glupload, ctx_.glcolorconv, ctx_.sink, NULL);
 
-    gst_element_link_many(ctx_.nvvidconv, ctx_.glupload, ctx_.glcolorconv, ctx_.sink, NULL);
+    gst_bin_add_many(GST_BIN(ctx_.pipeline), /*ctx_.source,*/ ctx_.streammux, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler,
+                     ctx_.nvglconv, ctx_.glupload, ctx_.glcolorconv, ctx_.sink, NULL);
+
+    gst_element_link_many(ctx_.streammux, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler, ctx_.nvglconv, ctx_.glupload, 
+                          ctx_.glcolorconv, ctx_.sink, NULL);
 
 }
 
@@ -75,4 +110,29 @@ void Player::destroyPipeline()
 {
     gst_element_set_state(ctx_.pipeline, GST_STATE_NULL);
     gst_object_unref(ctx_.pipeline);
+}
+
+int Player::getUnusedSourceId()
+{
+    for(int i = 0; i < MAX_NUM_SOURCES; i++) {
+        if(!ctx_.source_enable[i])
+            return i;
+    }
+
+    return -1;
+}
+
+int Player::getSourceId(int index)
+{
+
+    int id = 0;
+    for(int i = 0; i < MAX_NUM_SOURCES; i++) {
+        if(!ctx_.source_enable[i])
+            continue;
+        if(id == index)
+            return i;
+        id++;
+    }
+
+    return -1;
 }
