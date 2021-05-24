@@ -21,6 +21,10 @@ ApplicationWindow {
             MenuItem {
                 action: fileOpenAction
             }
+
+            MenuItem {
+                action: urlOpenAction
+            }
         }
     }
 
@@ -37,10 +41,34 @@ ApplicationWindow {
 
     Action {
         id: fileOpenAction
-        text: "&Open"
+        text: qsTr("&Open")
         onTriggered: fileOpenDialog.open()
     }
 
+    Dialog {
+        id: urlOpenDialog
+        title: qsTr("Open URL")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: player.addVideo(urlTextField.text)
+        onRejected: console.log("Cancel clicked")
+
+        Column {
+            Text {
+                text: qsTr("Please enter a URL: ")
+            }
+            TextField {
+                id: urlTextField
+                width: 350
+                selectByMouse: true
+            }
+        }
+    }
+
+    Action {
+        id: urlOpenAction
+        text: qsTr("Open URL")
+        onTriggered: urlOpenDialog.open()
+    }
 
     Item {
         anchors.fill: parent

@@ -141,6 +141,7 @@ void Player::createPipeline()
     g_object_set(ctx_.streammux, "batch-size", 1, NULL);
     g_object_set(ctx_.streammux, "width", 1280, NULL);
     g_object_set(ctx_.streammux, "height", 720, NULL);
+    g_object_set(ctx_.streammux, "live-source", 1, NULL);
 
     g_object_set (G_OBJECT(ctx_.pgie), "config-file-path", "../configures/config_infer_yolov5.txt", NULL);
     g_object_set(ctx_.osd, "process-mode", 1, NULL);
