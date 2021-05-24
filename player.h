@@ -11,6 +11,7 @@ struct AppCtx {
     GstElement *pipeline;
     GstElement *source[MAX_NUM_SOURCES];
     GstElement *streammux;
+    GstElement *pgie;
     GstElement *nvvidconv;
     GstElement *osd;
     GstElement *nvtiler;
@@ -19,7 +20,6 @@ struct AppCtx {
     GstElement *glcolorconv;
     GstElement *sink;
 
-    int num_source;
     bool source_enable[MAX_NUM_SOURCES];
 };
 
@@ -49,6 +49,7 @@ private:
     void destroyPipeline();
     int getUnusedSourceId();
     int getSourceId(int index);
+    int getSourceIndex(int id);
 
 
     QList<QString> playlist_;

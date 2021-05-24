@@ -13,11 +13,14 @@ Player::~Player()
 
 void Player::addVideo(const QString &uri)
 {
-    playlist_.append(uri);
-    ctx_.num_source = playlist_.size();
-    emit playlistChanged();
 
     int id = getUnusedSourceId();
+    ctx_.source_enable[id] = true;
+    int idx = getSourceIndex(id);
+
+    playlist_.insert(idx, uri);
+    emit playlistChanged();
+
     gchar *name = g_strdup_printf("videosrc_%u", id);
     qDebug() << "adding source: " << name;
     ctx_.source[id] = gst_element_factory_make("uridecodebin", name);
@@ -25,7 +28,6 @@ void Player::addVideo(const QString &uri)
     g_signal_connect(G_OBJECT(ctx_.source[id]), "pad-added", G_CALLBACK(cb_newpad), &ctx_);
 
     gst_bin_add(GST_BIN(ctx_.pipeline), ctx_.source[id]);
-    ctx_.source_enable[id] = true;
     gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
 }
 
@@ -39,7 +41,6 @@ void Player::removeVideo(int index)
     gst_element_set_state(ctx_.source[id], GST_STATE_NULL);
     gst_bin_remove(GST_BIN(ctx_.pipeline), ctx_.source[id]);
     ctx_.source[id] = nullptr;
-    --ctx_.num_source;
     gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
 
 }
@@ -83,6 +84,7 @@ void Player::createPipeline()
     ctx_.pipeline = gst_pipeline_new("pipeline");
     // ctx_.source = gst_element_factory_make("uridecodebin", "videosrc");
     ctx_.streammux = gst_element_factory_make("nvstreammux", "streammux");
+    ctx_.pgie = gst_element_factory_make ("nvinfer", "primary-nvinference-engine");
     ctx_.nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvidconv");
     ctx_.osd = gst_element_factory_make("nvdsosd", "osd");
     ctx_.nvtiler = gst_element_factory_make("nvmultistreamtiler", "nvtiler");
@@ -95,13 +97,14 @@ void Player::createPipeline()
     g_object_set(ctx_.streammux, "width", 1280, NULL);
     g_object_set(ctx_.streammux, "height", 720, NULL);
 
+    g_object_set (G_OBJECT(ctx_.pgie), "config-file-path", "../configures/config_infer_yolov5.txt", NULL);
     g_object_set(ctx_.osd, "process-mode", 1, NULL);
 
 
-    gst_bin_add_many(GST_BIN(ctx_.pipeline), /*ctx_.source,*/ ctx_.streammux, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler,
+    gst_bin_add_many(GST_BIN(ctx_.pipeline), /*ctx_.source,*/ ctx_.streammux, ctx_.pgie, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler,
                      ctx_.nvglconv, ctx_.glupload, ctx_.glcolorconv, ctx_.sink, NULL);
 
-    gst_element_link_many(ctx_.streammux, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler, ctx_.nvglconv, ctx_.glupload, 
+    gst_element_link_many(ctx_.streammux, ctx_.pgie, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler, ctx_.nvglconv, ctx_.glupload, 
                           ctx_.glcolorconv, ctx_.sink, NULL);
 
 }
@@ -135,4 +138,14 @@ int Player::getSourceId(int index)
     }
 
     return -1;
+}
+
+int Player::getSourceIndex(int id)
+{
+    int idx = -1;
+    for(int i = 0; i <= id; i++) {
+        if(ctx_.source_enable[i])
+            idx++;
+    }
+    return idx;
 }
