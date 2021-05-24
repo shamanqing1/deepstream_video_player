@@ -27,6 +27,7 @@ void Player::addVideo(const QString &uri)
     g_object_set(G_OBJECT(ctx_.source[id]), "uri", uri.toStdString().c_str(), NULL);
     g_signal_connect(G_OBJECT(ctx_.source[id]), "pad-added", G_CALLBACK(cb_newpad), &ctx_);
 
+
     gst_bin_add(GST_BIN(ctx_.pipeline), ctx_.source[id]);
     gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
 }
@@ -48,9 +49,19 @@ void Player::removeVideo(int index)
 void Player::setOutput(QVariant output)
 {
     QQuickItem *item = qvariant_cast<QQuickItem *>(output);
-    g_object_set(ctx_.sink, "widget", item, NULL);
+    g_object_set(G_OBJECT(ctx_.sink), "widget", item, NULL);
 
 }
+
+static GstPadProbeReturn
+event_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
+{
+  if (GST_EVENT_TYPE (GST_PAD_PROBE_INFO_DATA (info)) != GST_EVENT_EOS)
+    return GST_PAD_PROBE_PASS;
+
+  return GST_PAD_PROBE_DROP;
+}
+
 
 void Player::cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
 {
@@ -65,8 +76,10 @@ void Player::cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
         gchar *padname = g_strconcat("sink_", g_strsplit(elem_name, "_", 0)[1], NULL);
         qDebug() << "adding pad name: " << padname;
         GstPad *sinkpad = gst_element_get_static_pad(ctx->streammux, padname);
-        if(!sinkpad)
+        if(!sinkpad) {
             sinkpad = gst_element_get_request_pad(ctx->streammux, padname);
+            gst_pad_add_probe (sinkpad, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM, event_probe_cb, NULL, NULL);
+        }
 
         if(gst_pad_is_linked(pad)) {
             qDebug() << "Already linked decodebin to pipeline, skip";
@@ -138,10 +151,10 @@ void Player::createPipeline()
     ctx_.glcolorconv = gst_element_factory_make("glcolorconvert", "glcolorconv");
     ctx_.sink = gst_element_factory_make("qmlglsink", "sink");
 
-    g_object_set(ctx_.streammux, "batch-size", 1, NULL);
-    g_object_set(ctx_.streammux, "width", 1280, NULL);
-    g_object_set(ctx_.streammux, "height", 720, NULL);
-    g_object_set(ctx_.streammux, "live-source", 1, NULL);
+    g_object_set(G_OBJECT(ctx_.streammux), "batch-size", 1, NULL);
+    g_object_set(G_OBJECT(ctx_.streammux), "width", 1280, NULL);
+    g_object_set(G_OBJECT(ctx_.streammux), "height", 720, NULL);
+    g_object_set(G_OBJECT(ctx_.streammux), "live-source", 1, NULL);
 
     g_object_set (G_OBJECT(ctx_.pgie), "config-file-path", "../configures/config_infer_yolov5.txt", NULL);
     g_object_set(ctx_.osd, "process-mode", 1, NULL);
