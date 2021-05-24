@@ -4,15 +4,15 @@
 <context>
     <name>main</name>
     <message>
-        <source>Hello World</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <source>&amp;File</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Select a video file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Deepstream Video Player</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

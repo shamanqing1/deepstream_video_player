@@ -79,6 +79,51 @@ void Player::cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data)
     }
 }
 
+/* osd_sink_pad_buffer_probe  will extract metadata received on OSD sink pad
+ * and update params for drawing rectangle, object information etc. */
+GstPadProbeReturn Player::osd_sink_pad_buffer_probe (GstPad * pad,
+    GstPadProbeInfo * info, gpointer u_data)
+{
+    GstBuffer *buf = (GstBuffer *) info->data;
+    guint num_rects = 0; 
+    NvDsObjectMeta *obj_meta = NULL;
+    guint vehicle_count = 0;
+    guint person_count = 0;
+    NvDsMetaList * l_frame = NULL;
+    NvDsMetaList * l_obj = NULL;
+    NvDsDisplayMeta *display_meta = NULL;
+
+    AppCtx *ctx = (AppCtx *)u_data;
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta (buf);
+
+    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+        l_frame = l_frame->next) {
+
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) (l_frame->data);
+        for (NvDsMetaList * l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+            l_obj = l_obj->next) {
+            NvDsObjectMeta *obj = (NvDsObjectMeta *) l_obj->data;
+            int classid = obj->class_id;
+
+            static std::map<int, NvOSD_ColorParams> color_map;
+
+            if(color_map.find(classid) == color_map.end()) {
+                NvOSD_ColorParams color;
+                color.red = std::rand() / (float)RAND_MAX;
+                color.green = std::rand() / (float)RAND_MAX;
+                color.blue = std::rand() / (float)RAND_MAX;
+                color.alpha = 0.8;
+                color_map.emplace(classid, color);
+            }
+            obj->rect_params.border_color = color_map.at(classid);
+            obj->text_params.font_params.font_size = 12;
+            obj->text_params.font_params.font_name = g_strdup("Serif");
+            obj->text_params.text_bg_clr = {0.3, 0.3, 0.3, 0.6};
+        }
+    }
+    return GST_PAD_PROBE_OK;
+}
+
 void Player::createPipeline()
 {
     ctx_.pipeline = gst_pipeline_new("pipeline");
@@ -107,6 +152,13 @@ void Player::createPipeline()
     gst_element_link_many(ctx_.streammux, ctx_.pgie, ctx_.nvvidconv, ctx_.osd, ctx_.nvtiler, ctx_.nvglconv, ctx_.glupload, 
                           ctx_.glcolorconv, ctx_.sink, NULL);
 
+    GstPad *osd_sink_pad = gst_element_get_static_pad(ctx_.osd, "sink");
+    if (!osd_sink_pad)
+        g_print ("Unable to get sink pad\n");
+    else
+        gst_pad_add_probe (osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
+            osd_sink_pad_buffer_probe, &ctx_, NULL);
+    gst_object_unref (osd_sink_pad);
 }
 
 void Player::destroyPipeline()

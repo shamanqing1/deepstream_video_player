@@ -66,8 +66,15 @@ else()
     qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 endif()
 
-target_include_directories(deepstream_video_player PRIVATE ${GSTREAMER_INCLUDE_DIRS})
-target_link_directories(deepstream_video_player PRIVATE ${GSTREAMER_LIBRARY_DIRS})
+
+set(DEEPSTREAM_DIR "/opt/nvidia/deepstream/deepstream-5.1")
+set(DEEPSTREAM_INCLUDE_DIRS "${DEEPSTREAM_DIR}/sources/includes")
+set(DEEPSTREAM_LINK_DIRS "${DEEPSTREAM_DIR}/lib" "${DEEPSTREAM_DIR}/lib/gst-plugins")
+set(DEEPSTREAM_LIBRARYS "nvdsgst_meta" "nvds_meta")
+
+target_link_directories(deepstream_video_player PRIVATE ${DEEPSTREAM_LINK_DIRS})
+target_include_directories(deepstream_video_player PRIVATE ${GSTREAMER_INCLUDE_DIRS} ${DEEPSTREAM_INCLUDE_DIRS})
+target_link_directories(deepstream_video_player PRIVATE ${GSTREAMER_LIBRARY_DIRS} ${DEEPSTREAM_INCLUDE_DIRS})
 
 target_compile_definitions(deepstream_video_player
   PRIVATE $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:QT_QML_DEBUG>)
@@ -78,6 +85,7 @@ target_link_libraries(deepstream_video_player
         Qt${QT_VERSION_MAJOR}::Quick
         Qt${QT_VERSION_MAJOR}::QuickControls2
         ${GSTREAMER_LIBRARIES}
+        ${DEEPSTREAM_LIBRARYS}
 )
 
 set_target_properties(deepstream_video_player PROPERTIES

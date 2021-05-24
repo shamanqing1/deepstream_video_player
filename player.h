@@ -5,6 +5,13 @@
 #include <QQuickItem>
 #include <gst/gst.h>
 
+#include <memory>
+#include <map>
+
+extern "C" {
+#include "gstnvdsmeta.h"
+}
+
 constexpr int MAX_NUM_SOURCES = 128;
 
 struct AppCtx {
@@ -21,6 +28,7 @@ struct AppCtx {
     GstElement *sink;
 
     bool source_enable[MAX_NUM_SOURCES];
+    // std::map<int, NvOSD_ColorParams> color_map;
 };
 
 class Player : public QObject
@@ -45,6 +53,8 @@ signals:
 
 private:
     static void cb_newpad(GstElement *decodebin, GstPad *pad, gpointer data);
+    static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad,
+        GstPadProbeInfo *info, gpointer u_data);
     void createPipeline();
     void destroyPipeline();
     int getUnusedSourceId();
