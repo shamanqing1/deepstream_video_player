@@ -15,5 +15,17 @@
         <source>Deepstream Video Player</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>&amp;Open</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Open URL</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Please enter a URL: </source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 </TS>

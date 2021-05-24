@@ -13,7 +13,6 @@ Player::~Player()
 
 void Player::addVideo(const QString &uri)
 {
-
     int id = getUnusedSourceId();
     ctx_.source_enable[id] = true;
     int idx = getSourceIndex(id);
@@ -26,10 +25,9 @@ void Player::addVideo(const QString &uri)
     ctx_.source[id] = gst_element_factory_make("uridecodebin", name);
     g_object_set(G_OBJECT(ctx_.source[id]), "uri", uri.toStdString().c_str(), NULL);
     g_signal_connect(G_OBJECT(ctx_.source[id]), "pad-added", G_CALLBACK(cb_newpad), &ctx_);
-
-
     gst_bin_add(GST_BIN(ctx_.pipeline), ctx_.source[id]);
     gst_element_set_state(ctx_.pipeline, GST_STATE_PLAYING);
+    gst_element_sync_state_with_parent(ctx_.source[id]);
 }
 
 void Player::removeVideo(int index)
@@ -56,10 +54,10 @@ void Player::setOutput(QVariant output)
 static GstPadProbeReturn
 event_probe_cb (GstPad * pad, GstPadProbeInfo * info, gpointer user_data)
 {
-  if (GST_EVENT_TYPE (GST_PAD_PROBE_INFO_DATA (info)) != GST_EVENT_EOS)
-    return GST_PAD_PROBE_PASS;
+    if(GST_EVENT_TYPE (GST_PAD_PROBE_INFO_DATA (info)) != GST_EVENT_EOS)
+        return GST_PAD_PROBE_PASS;
 
-  return GST_PAD_PROBE_DROP;
+    return GST_PAD_PROBE_DROP;
 }
 
 
@@ -167,11 +165,8 @@ void Player::createPipeline()
                           ctx_.glcolorconv, ctx_.sink, NULL);
 
     GstPad *osd_sink_pad = gst_element_get_static_pad(ctx_.osd, "sink");
-    if (!osd_sink_pad)
-        g_print ("Unable to get sink pad\n");
-    else
-        gst_pad_add_probe (osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
-            osd_sink_pad_buffer_probe, &ctx_, NULL);
+    gst_pad_add_probe (osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
+        osd_sink_pad_buffer_probe, &ctx_, NULL);
     gst_object_unref (osd_sink_pad);
 }
 
